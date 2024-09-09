@@ -2,7 +2,7 @@
  use specs_derive::*;
  use std::cmp::{max, min};
  use rltk::{RGB, Rltk, RandomNumberGenerator, Algorithm2D, BaseMap, Point};
- use super::Rect;
+ use super::{Rect, Player, Viewshed};
 
 // PartialEq allows us to use == without defining it ourselves. 
 // Copy makes copy assignment the default instead of move assignment
@@ -16,6 +16,8 @@ pub enum TileType {
 pub struct Map {
     pub tiles: Vec<TileType>,
     pub rooms: Vec<Rect>,
+    pub revealed_tiles: Vec<bool>,
+    pub visible_tiles: Vec<bool>,
     pub width: i32,
     pub height: i32,
 }
@@ -56,6 +58,8 @@ impl Map {
         let mut map = Map{
             tiles : vec![TileType::Wall; 80*50],
             rooms : Vec::new(),
+            revealed_tiles: vec![false; 80*50],
+            visible_tiles: vec![false; 80*50],
             width : 80,
             height: 50,
         };
@@ -111,27 +115,28 @@ impl BaseMap for Map {
     }
 }
 
-pub fn draw_map(map: &Map, ctx: &mut Rltk) {
+pub fn draw_map(ecs: &World, ctx: &mut Rltk) {
+    let map = ecs.fetch::<Map>();
+
     let mut x = 0;
     let mut y = 0;
-
-    for tile in map.tiles.iter() {
-        match tile {
-            TileType::Floor => {
-                ctx.set(x, y, 
-                    RGB::from_f32(0.5, 0.5, 0.5), 
-                    RGB::from_f32(0., 0., 0.), 
-                    rltk::to_cp437('.')
-                );
-            },
-            TileType::Wall => {
-                ctx.set(x, y,
-                    RGB::from_f32(0.8, 0.8, 0.8),
-                    RGB::from_f32(0., 0., 0.,),
-                    rltk::to_cp437('#')
-                );
+    for (idx, tile) in map.tiles.iter().enumerate() {
+        if map.revealed_tiles[idx] {
+            let glyph;
+            let mut fg;
+            match tile {
+                TileType::Floor => {
+                    glyph = rltk::to_cp437('.');
+                    fg = RGB::from_f32(0.5, 0.5, 0.0);
+                },
+                TileType::Wall => {
+                    glyph = rltk::to_cp437('#');
+                    fg = RGB::from_f32(0.8, 0.8, 0.0);
+                }
             }
-        };
+            if !map.visible_tiles[idx] {fg = fg.to_greyscale() }
+            ctx.set(x, y, fg, RGB::from_f32(0., 0., 0.), glyph);
+        }
         x += 1;
         if x > 79 {
             x = 0;
